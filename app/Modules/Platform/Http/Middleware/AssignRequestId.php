@@ -1,0 +1,32 @@
+<?php
+
+namespace App\Modules\Platform\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Correlation ID for logs, Sentry and support tickets (NFR03). Uses the client's
+ * X-Request-Id when valid, otherwise makes one, and echoes it in the response.
+ */
+class AssignRequestId
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+        $id = $request->header('X-Request-Id');
+        if (! is_string($id) || ! preg_match('/^[A-Za-z0-9._-]{8,64}$/', $id)) {
+            $id = (string) Str::ulid();
+        }
+
+        $request->attributes->set('request_id', $id);
+        Log::withContext(['request_id' => $id]);
+
+        $response = $next($request);
+        $response->headers->set('X-Request-Id', $id);
+
+        return $response;
+    }
+}
