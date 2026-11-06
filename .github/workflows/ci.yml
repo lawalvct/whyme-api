@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.3 matches local Laragon; 8.4 is the production target (docs/01 §1).
+        php: ['8.3', '8.4']
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: whyme_testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, intl, pdo_mysql, bcmath, gd, zip
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Code style (Pint)
+        if: matrix.php == '8.4'
+        run: vendor/bin/pint --test
+
+      - name: Tests
+        run: php artisan test
+
+      # whyme-apps generates its TypeScript client from this file (docs/01 §3).
+      - name: API spec (api.json) is up to date
+        if: matrix.php == '8.4'
+        run: |
+          php artisan scramble:export --path=api.json
+          if ! git diff --quiet -- api.json; then
+            echo "::error::api.json is out of date. Run 'php artisan scramble:export --path=api.json' and commit it."
+            git diff -- api.json | head -50
+            exit 1
+          fi

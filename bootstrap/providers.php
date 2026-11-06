@@ -1,8 +1,13 @@
 <?php
 
+use App\Modules\Identity\IdentityServiceProvider;
+use App\Modules\Platform\PlatformServiceProvider;
+use App\Providers\AppServiceProvider;
+use App\Providers\Filament\AdminPanelProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Modules\Platform\PlatformServiceProvider::class,
-    App\Modules\Identity\IdentityServiceProvider::class,
-    App\Providers\Filament\AdminPanelProvider::class,
+    AppServiceProvider::class,
+    PlatformServiceProvider::class,
+    IdentityServiceProvider::class,
+    AdminPanelProvider::class,
 ];
